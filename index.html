@@ -38,6 +38,7 @@
         <button class="tab" data-view="news">News Live</button>
         <button class="tab" data-view="ai">Analisi IA</button>
         <button class="tab" data-view="archive">Archivio</button>
+        <button class="tab" data-view="instructions">Istruzioni</button>
         <button class="tab" data-view="data">Dati</button>
       </nav>
 
@@ -150,10 +151,50 @@
         </article>
       </section>
 
+
+      <section id="instructions" class="view">
+        <article class="card">
+          <div class="section-title"><h2>Come usare Fantacalcio Rosa Live</h2></div>
+          <div class="instructions-grid">
+            <div class="instruction-box"><strong>1. Carica la rosa</strong><p>Vai in <b>Dati → Importa rosa rapida</b> e incolla una lista CSV/testo, oppure importa un file CSV. Puoi anche aggiungere i giocatori uno alla volta dalla sezione Rosa.</p></div>
+            <div class="instruction-box"><strong>2. Aggiorna la giornata</strong><p>In <b>Giornata</b> imposta numero giornata, modulo preferito, scadenza formazione e note personali.</p></div>
+            <div class="instruction-box"><strong>3. Controlla le news</strong><p>In <b>News Live</b> incolla probabili formazioni, indisponibili o appunti presi da fonti esterne. L'app cerca i tuoi giocatori e propone status aggiornati.</p></div>
+            <div class="instruction-box"><strong>4. Genera la formazione</strong><p>In <b>Formazione</b> premi “Suggerisci dai dati live”. Poi correggi manualmente se hai sensazioni diverse.</p></div>
+            <div class="instruction-box"><strong>5. Usa ChatGPT gratis</strong><p>In <b>Analisi IA</b> copia il prompt e incollalo in ChatGPT per avere un parere più ragionato. L'app non usa API e non costa nulla.</p></div>
+            <div class="instruction-box"><strong>6. Backup</strong><p>In <b>Dati</b> esporta JSON per salvare la rosa o passarla a un altro dispositivo. Ogni telefono mantiene i propri dati separati.</p></div>
+          </div>
+        </article>
+        <article class="card">
+          <div class="section-title"><h2>Formato consigliato per import veloce</h2></div>
+          <p class="muted">Il formato più sicuro è una riga per giocatore, separata da punto e virgola:</p>
+          <pre class="code-sample">Ruolo;Nome;Squadra;Costo;Quotazione;Note
+P;Sommer;Inter;12;18;Portiere titolare
+D;Dimarco;Inter;42;25;Top difesa
+C;Orsolini;Bologna;32;24;Bonus
+A;Lautaro Martinez;Inter;105;40;Top attacco</pre>
+          <p class="muted">Va bene anche un CSV esportato dall'app ufficiale, purché contenga almeno nome e ruolo. Se l'esportazione ha colonne diverse, l'app prova a riconoscerle automaticamente.</p>
+        </article>
+      </section>
+
       <section id="data" class="view">
         <article class="card">
           <div class="section-title"><h2>Impostazioni</h2></div>
           <form id="settingsForm" class="form-grid slim"><label>Nome squadra<input id="teamName" autocomplete="off" /></label><label>Crediti iniziali<input id="initialBudget" type="number" min="0" step="1" /></label><button class="wide" type="submit">Salva impostazioni</button></form>
+        </article>
+
+        <article class="card">
+          <div class="section-title"><h2>Importa rosa rapida</h2></div>
+          <p class="muted">Incolla una lista manuale o CSV. Formato consigliato: Ruolo;Nome;Squadra;Costo;Quotazione;Note. Puoi anche caricare un file CSV esportato dall'app ufficiale.</p>
+          <textarea id="quickImportText" placeholder="Ruolo;Nome;Squadra;Costo;Quotazione;Note
+P;Sommer;Inter;12;18;Portiere titolare
+D;Dimarco;Inter;42;25;Top difesa"></textarea>
+          <div class="row form-actions wrap">
+            <button id="previewImportBtn" type="button">Anteprima import</button>
+            <button id="applyImportBtn" class="ghost" type="button">Importa giocatori</button>
+            <label class="file-btn">Carica CSV<input id="importCsvFile" type="file" accept=".csv,text/csv,text/plain" /></label>
+            <label class="inline-check"><input id="replaceRosterCheck" type="checkbox" /> Sostituisci rosa attuale</label>
+          </div>
+          <div id="quickImportPreview" class="players-list import-preview"></div>
         </article>
         <article class="card">
           <div class="section-title"><h2>Backup</h2></div>
