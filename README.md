@@ -1,49 +1,34 @@
-# Fantacalcio Manager AI Zero
+# Fantacalcio Rosa Live
 
-PWA gratuita per gestire una rosa fantacalcio durante la stagione.
+PWA personale per gestire solo la propria rosa fantacalcio durante la stagione.
 
-## Cosa fa
+## Obiettivo
 
-- Gestione rosa con ruolo, squadra, costo, quotazione, stato e note.
-- Dashboard con score rosa, budget residuo, rischi e consigli rapidi.
-- Formazione per giornata con moduli classici e suggerimento automatico.
-- Mercato/svincolati con priorità e offerta massima.
-- Prompt IA generato automaticamente da copiare in ChatGPT.
-- Backup esporta/importa JSON.
-- Funziona su Android e iOS via browser.
-- Nessuna API, nessun server, nessun costo obbligatorio.
+Non è un gestionale lega e non è un tool asta. Serve per:
 
-## Come provarla sul PC
+- inserire manualmente la propria rosa;
+- seguire la giornata corrente;
+- marcare status live: OK, dubbio, ballottaggio, infortunato, squalificato, non convocato;
+- incollare news/probabili formazioni e applicare aggiornamenti ai giocatori trovati;
+- generare una formazione suggerita con regole locali;
+- copiare un prompt già strutturato per ChatGPT;
+- salvare backup JSON.
 
-Apri `index.html` con il browser.
+## Costi
 
-Nota: installazione PWA/offline e service worker funzionano meglio se pubblicata online o servita da localhost.
+Zero: nessuna API, nessun backend, nessun login.
 
-## Come pubblicarla gratis
+## Uso
 
-Metodo semplice:
+Caricare questi file nella root del repository GitHub Pages:
 
-1. Crea un repository GitHub.
-2. Carica tutti questi file nella root del repository.
-3. Vai in Settings > Pages.
-4. Source: Deploy from branch.
-5. Branch: main / root.
-6. Apri il link GitHub Pages da Android/iPhone.
-7. Dal browser scegli "Aggiungi alla schermata Home".
+- index.html
+- style.css
+- app.js
+- manifest.webmanifest
+- sw.js
+- icon-192.png
+- icon-512.png
+- README.md
 
-Alternative gratuite: Netlify, Vercel, Cloudflare Pages.
-
-## Uso consigliato
-
-- Tu e il tuo amico potete usare lo stesso link.
-- I dati restano salvati nel browser del singolo dispositivo.
-- Per condividere la rosa: Dati > Esporta JSON, poi l'altro fa Importa JSON.
-- Per usare l'IA: sezione IA > Copia prompt IA > incolla in ChatGPT.
-
-## Limiti voluti
-
-- Non scarica automaticamente infortuni/probabili formazioni da siti esterni.
-- Non usa API IA a pagamento.
-- Non ha login o database condiviso nella prima versione.
-
-Questi limiti tengono il progetto gratuito, semplice e stabile.
+I dati restano nel browser del dispositivo. Per copiarli su altro telefono usare Esporta JSON / Importa JSON.

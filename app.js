@@ -1,299 +1,198 @@
-const STORAGE_KEY = "fantacalcio-manager-v1";
+const STORAGE_KEY = "fantacalcio-rosa-live-v2";
+const OLD_KEYS = ["fantacalcio-manager-v1"];
 const DEFAULT_STATE = {
-  settings: { teamName: "La mia rosa", initialBudget: 500, leagueTeams: 10, modifierRule: "" },
+  settings: { teamName: "La mia rosa", initialBudget: 500 },
   matchday: 1,
   roster: [],
-  targets: [],
-  lineup: { module: "3-4-3", strategy: "balanced", slots: [] }
+  current: { opponent: "", deadline: "", preferredModule: "3-4-3", strategy: "balanced", notes: "", lineup: [] },
+  archive: []
 };
-
 let state = loadState();
 let currentRoleFilter = "all";
 let deferredInstallPrompt = null;
-
-const $ = (id) => document.getElementById(id);
+const $ = id => document.getElementById(id);
 const uid = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
+function clone(x){ return JSON.parse(JSON.stringify(x)); }
+function normalize(t){ return String(t||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""); }
+function escapeHtml(v){ return String(v ?? "").replace(/[&<>'"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[c])); }
+function toast(msg){ const el=$("toast"); el.textContent=msg; el.classList.remove("hidden"); setTimeout(()=>el.classList.add("hidden"),2200); }
+function roleName(r){ return ({P:"Portieri",D:"Difensori",C:"Centrocampisti",A:"Attaccanti"}[r]||r); }
+function statusLabel(s){ return ({ok:"OK",monitorare:"Da monitorare",dubbio:"Dubbio",ballottaggio:"Ballottaggio",probabile:"Probabile titolare",infortunato:"Infortunato",squalificato:"Squalificato",non_convocato:"Non convocato",evitare:"Evitare"}[s]||s); }
+function starterLabel(s){ return ({sicuro:"Sicuro",probabile:"Probabile",ballottaggio:"Ballottaggio",panchina:"Panchina",out:"Out"}[s]||s); }
+function isBad(p){ return ["infortunato","squalificato","non_convocato","evitare"].includes(p.status) || p.starter === "out"; }
+function isWatch(p){ return ["monitorare","dubbio","ballottaggio"].includes(p.status) || ["ballottaggio","panchina"].includes(p.starter); }
+function playerScore(p){
+  if(isBad(p)) return -100;
+  const status = {probabile:10, ok:8, monitorare:2, dubbio:-3, ballottaggio:-4}[p.status] ?? 0;
+  const starter = {sicuro:10, probabile:6, ballottaggio:-1, panchina:-6, out:-100}[p.starter] ?? 0;
+  const rel = Number(p.reliability||3)*4;
+  const bonus = Number(p.bonus||5)*2;
+  const malus = Number(p.malus||3)*-1.2;
+  const notes = normalize(p.note);
+  const noteBoost = (notes.includes("rigor")?6:0)+(notes.includes("piazz")?3:0)+(notes.includes("titol")?2:0);
+  return status+starter+rel+bonus+malus+noteBoost;
+}
 function loadState(){
-  try {
+  try{
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return structuredClone(DEFAULT_STATE);
-    return { ...structuredClone(DEFAULT_STATE), ...JSON.parse(raw) };
-  } catch {
-    return structuredClone(DEFAULT_STATE);
-  }
+    if(raw) return mergeState(JSON.parse(raw));
+    for(const k of OLD_KEYS){
+      const old = localStorage.getItem(k);
+      if(old){
+        const migrated = migrateOld(JSON.parse(old));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
+        return migrated;
+      }
+    }
+  }catch{}
+  return clone(DEFAULT_STATE);
 }
+function mergeState(data){ return {...clone(DEFAULT_STATE), ...data, settings:{...clone(DEFAULT_STATE).settings, ...(data.settings||{})}, current:{...clone(DEFAULT_STATE).current, ...(data.current||{})}}; }
+function migrateOld(old){
+  const st = clone(DEFAULT_STATE);
+  st.settings.teamName = old?.settings?.teamName || "La mia rosa";
+  st.settings.initialBudget = old?.settings?.initialBudget || 500;
+  st.matchday = old?.matchday || 1;
+  st.roster = (old?.roster||[]).map(p=>({
+    id:p.id||uid(), name:p.name||"", role:p.role||"C", team:p.team||"", status:mapOldStatus(p.status), reliability:3,
+    starter:p.status==="squalificato"||p.status==="infortunato"?"out":"probabile", bonus:5, malus:3, source:"", note:p.note||""
+  }));
+  st.current.preferredModule = old?.lineup?.module || "3-4-3";
+  st.current.strategy = old?.lineup?.strategy || "balanced";
+  return st;
+}
+function mapOldStatus(s){ return {vendere:"evitare"}[s] || s || "ok"; }
 function saveState(){ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
-function toast(message){
-  const el = $("toast");
-  el.textContent = message;
-  el.classList.remove("hidden");
-  setTimeout(() => el.classList.add("hidden"), 2300);
-}
-function fmt(n){ return Number(n || 0).toLocaleString("it-IT"); }
-function normalize(text){ return String(text || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, ""); }
-function roleName(role){ return ({P:"Portieri",D:"Difensori",C:"Centrocampisti",A:"Attaccanti"}[role] || role); }
-function statusWeight(status){
-  return { ok: 5, monitorare: 4, dubbio: 3, squalificato: 1, infortunato: 1, vendere: 0 }[status] ?? 3;
-}
-function playerValue(p){
-  const q = Number(p.quote || 0);
-  const c = Number(p.cost || 0);
-  const base = q || Math.max(1, c);
-  return base + statusWeight(p.status) * 3 + (normalize(p.note).includes("rigor") ? 8 : 0) + (normalize(p.note).includes("titol") ? 5 : 0);
-}
 
 function bindNavigation(){
-  document.querySelectorAll(".tab").forEach(btn => btn.addEventListener("click", () => {
-    document.querySelectorAll(".tab").forEach(b => b.classList.remove("active"));
-    document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
-    btn.classList.add("active");
-    $(btn.dataset.view).classList.add("active");
-    if (btn.dataset.view === "ai") renderPrompt();
+  document.querySelectorAll(".tab").forEach(btn=>btn.addEventListener("click",()=>{
+    document.querySelectorAll(".tab").forEach(b=>b.classList.remove("active"));
+    document.querySelectorAll(".view").forEach(v=>v.classList.remove("active"));
+    btn.classList.add("active"); $(btn.dataset.view).classList.add("active");
+    if(btn.dataset.view === "ai") renderPrompt();
   }));
+}
+function bindEvents(){
+  $("saveMatchdayBtn").onclick=()=>{ state.matchday=Number($("matchdayInput").value||1); saveState(); renderAll(); toast("Giornata salvata"); };
+  $("playerForm").addEventListener("submit", savePlayer);
+  $("resetFormBtn").onclick=resetPlayerForm;
+  $("searchPlayer").addEventListener("input", renderRoster);
+  document.querySelectorAll(".chip[data-role]").forEach(b=>b.onclick=()=>{ document.querySelectorAll(".chip").forEach(x=>x.classList.remove("active")); b.classList.add("active"); currentRoleFilter=b.dataset.role; renderRoster(); });
+  $("matchdayForm").addEventListener("submit", e=>{ e.preventDefault(); state.current.opponent=$("opponent").value.trim(); state.current.deadline=$("deadline").value; state.current.preferredModule=$("preferredModule").value; state.current.strategy=$("strategy").value; state.current.notes=$("matchNotes").value.trim(); saveState(); renderAll(); toast("Giornata aggiornata"); });
+  $("autoLineupBtn").onclick=autoLineup;
+  $("saveLineupBtn").onclick=()=>{ state.current.lineup = readLineupFromDom(); saveState(); toast("Formazione salvata"); };
+  $("clearLineupBtn").onclick=()=>{ state.current.lineup=[]; saveState(); renderLineup(); toast("Formazione svuotata"); };
+  $("analyzeNewsBtn").onclick=analyzeNews;
+  $("clearNewsBtn").onclick=()=>{ $("newsText").value=""; $("newsResults").innerHTML=""; };
+  $("copyPromptBtn").onclick=()=>copyText($("aiPrompt").value,"Prompt copiato");
+  $("refreshPromptBtn").onclick=renderPrompt;
+  $("copyBriefBtn").onclick=()=>copyText(buildBrief(),"Brief copiato");
+  $("archiveCurrentBtn").onclick=archiveCurrent;
+  $("settingsForm").addEventListener("submit", e=>{ e.preventDefault(); state.settings.teamName=$("teamName").value.trim()||"La mia rosa"; state.settings.initialBudget=Number($("initialBudget").value||0); saveState(); renderAll(); toast("Impostazioni salvate"); });
+  $("exportBtn").onclick=exportJson;
+  $("importFile").onchange=importJson;
+  $("resetAllBtn").onclick=()=>{ if(confirm("Cancellare tutti i dati salvati su questo dispositivo?")){ localStorage.removeItem(STORAGE_KEY); state=clone(DEFAULT_STATE); renderAll(); toast("Reset completato"); }};
+  window.addEventListener("beforeinstallprompt", e=>{ e.preventDefault(); deferredInstallPrompt=e; $("installBtn").classList.remove("hidden"); });
+  $("installBtn").onclick=async()=>{ if(!deferredInstallPrompt) return; deferredInstallPrompt.prompt(); await deferredInstallPrompt.userChoice; deferredInstallPrompt=null; $("installBtn").classList.add("hidden"); };
+  if("serviceWorker" in navigator) window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
 }
 
 function renderAll(){
-  $("matchdayInput").value = state.matchday;
-  renderDashboard();
-  renderRoster();
-  renderLineup();
-  renderTargets();
-  renderSettings();
-  renderPrompt();
+  $("matchdayInput").value=state.matchday; renderHome(); renderRoster(); renderMatchday(); renderLineup(); renderArchive(); renderSettings(); renderPrompt();
 }
-
-function roleCounts(){
-  return ["P","D","C","A"].reduce((acc, r) => {
-    acc[r] = state.roster.filter(p => p.role === r).length;
-    return acc;
-  }, {});
+function statusBuckets(){
+  const ok=state.roster.filter(p=>!isBad(p)&&!isWatch(p)).length;
+  const watch=state.roster.filter(p=>!isBad(p)&&isWatch(p)).length;
+  const out=state.roster.filter(isBad).length;
+  return {ok,watch,out};
 }
-function riskPlayers(){ return state.roster.filter(p => ["dubbio","infortunato","squalificato","vendere"].includes(p.status)); }
-function spent(){ return state.roster.reduce((sum,p) => sum + Number(p.cost || 0), 0); }
-function healthAnalysis(){
-  const counts = roleCounts();
-  const risks = riskPlayers();
-  let score = 100;
-  const items = [];
-  const expected = {P:3,D:8,C:8,A:6};
-  for (const role of ["P","D","C","A"]){
-    const missing = expected[role] - (counts[role] || 0);
-    if (missing > 0){
-      score -= missing * (role === "A" ? 7 : 5);
-      items.push({level:"danger", text:`Reparto ${roleName(role)} incompleto: mancano ${missing} giocatori rispetto alla struttura classica 3/8/8/6.`});
-    } else if (counts[role] > expected[role]) {
-      items.push({level:"warn", text:`Reparto ${roleName(role)} sovradimensionato: valuta se hai risorse bloccate inutilmente.`});
-    }
-  }
-  const hardRisks = state.roster.filter(p => ["infortunato","squalificato","vendere"].includes(p.status));
-  score -= hardRisks.length * 7;
-  score -= state.roster.filter(p => p.status === "dubbio").length * 3;
-  if (hardRisks.length) items.push({level:"danger", text:`Hai ${hardRisks.length} giocatori tra infortunati, squalificati o da vendere: priorità mercato.`});
-  if (risks.length && !hardRisks.length) items.push({level:"warn", text:`Hai ${risks.length} giocatori da monitorare prima della consegna formazione.`});
-  const budgetLeft = Number(state.settings.initialBudget || 0) - spent();
-  if (budgetLeft < 0) { score -= 12; items.push({level:"danger", text:`Budget negativo: controlla costi asta o crediti iniziali.`}); }
-  if (state.roster.length === 0) { score = 0; items.push({level:"warn", text:"Inserisci la rosa per ottenere diagnosi, formazione suggerita e prompt IA."}); }
-  if (!items.length) items.push({level:"ok", text:"Rosa strutturalmente equilibrata. Ora il valore lo fanno titolarità, calendario, bonus e gestione dei rischi."});
-  return {score: Math.max(0, Math.min(100, Math.round(score))), items};
+function liveScore(){
+  if(!state.roster.length) return 0;
+  const {watch,out}=statusBuckets();
+  let score=100 - out*12 - watch*5;
+  const counts={P:0,D:0,C:0,A:0}; state.roster.forEach(p=>counts[p.role]++);
+  const min={P:1,D:3,C:3,A:1}; Object.keys(min).forEach(r=>{ if(counts[r]<min[r]) score-=15; });
+  return Math.max(0, Math.min(100, Math.round(score)));
 }
-
-function renderDashboard(){
-  const analysis = healthAnalysis();
-  $("healthScore").textContent = analysis.score;
-  $("totalPlayers").textContent = state.roster.length;
-  $("budgetLeft").textContent = fmt(Number(state.settings.initialBudget || 0) - spent());
-  $("riskCount").textContent = riskPlayers().length;
-  $("diagnosis").innerHTML = analysis.items.map(i => `<div class="diagnosis-item"><span class="dot ${i.level}"></span><span>${escapeHtml(i.text)}</span></div>`).join("");
-  const tips = buildTips();
-  $("quickTips").innerHTML = tips.map(t => `<li>${escapeHtml(t)}</li>`).join("") || `<li>Nessun consiglio disponibile: aggiungi giocatori e obiettivi mercato.</li>`;
+function renderHome(){
+  const b=statusBuckets(); $("okCount").textContent=b.ok; $("watchCount").textContent=b.watch; $("outCount").textContent=b.out; $("totalPlayers").textContent=state.roster.length; $("liveScore").textContent=liveScore();
+  const items=buildPriorities();
+  $("priorities").innerHTML = items.map(i=>`<div class="diagnosis-item"><span class="dot ${i.level}"></span><span>${escapeHtml(i.text)}</span></div>`).join("");
+  const ordered=[...state.roster].sort((a,b)=>playerScore(b)-playerScore(a));
+  $("trafficRoster").innerHTML = ordered.length?ordered.map(p=>playerMini(p)).join(""):`<div class="empty">Inserisci la rosa per avere il semaforo live.</div>`;
 }
-function buildTips(){
-  const tips = [];
-  const counts = roleCounts();
-  if ((counts.A || 0) < 6) tips.push("Priorità: completa l'attacco. È il reparto che pesa di più su bonus e scambi.");
-  if ((counts.P || 0) < 3) tips.push("Sistema la porta: idealmente 3 portieri, meglio se collegati per titolarità/copertura.");
-  const sell = state.roster.filter(p => p.status === "vendere");
-  if (sell.length) tips.push(`Prepara tagli/scambi per: ${sell.map(p=>p.name).join(", ")}.`);
-  const topTargets = state.targets.filter(t => t.priority === "alta");
-  if (topTargets.length) tips.push(`Obiettivi mercato prioritari: ${topTargets.slice(0,3).map(t=>t.name).join(", ")}.`);
-  const doubts = state.roster.filter(p => p.status === "dubbio");
-  if (doubts.length) tips.push("Prima della consegna formazione controlla i dubbi: " + doubts.slice(0,4).map(p=>p.name).join(", ") + ".");
-  return tips;
+function buildPriorities(){
+  const out=state.roster.filter(isBad), watch=state.roster.filter(p=>!isBad(p)&&isWatch(p));
+  const arr=[];
+  if(!state.roster.length) arr.push({level:"warn",text:"Inserisci la tua rosa personale. Questa app è pensata per gestire solo i tuoi giocatori, giornata per giornata."});
+  if(out.length) arr.push({level:"danger",text:`Evita o sostituisci: ${out.map(p=>p.name).join(", ")}.`});
+  if(watch.length) arr.push({level:"warn",text:`Da verificare prima della consegna: ${watch.map(p=>p.name).join(", ")}.`});
+  const noSource=state.roster.filter(p=>!p.source && (isWatch(p)||isBad(p)));
+  if(noSource.length) arr.push({level:"warn",text:`Mancano fonti/link su ${noSource.slice(0,4).map(p=>p.name).join(", ")}: aggiorna da News Live o note.`});
+  if(state.current.deadline) arr.push({level:"ok",text:`Scadenza salvata: ${new Date(state.current.deadline).toLocaleString("it-IT")}.`});
+  if(!arr.length) arr.push({level:"ok",text:"Rosa pulita: nessuna urgenza live rilevante. Genera la formazione e poi fai il check news."});
+  return arr;
 }
-
+function playerMini(p){ return `<div class="player-card"><span class="badge">${p.role}</span><div><strong>${escapeHtml(p.name)}</strong><div class="player-meta">${escapeHtml(p.team||"-")} · ${starterLabel(p.starter)} · score ${Math.round(playerScore(p))}</div></div><span class="status ${p.status}">${statusLabel(p.status)}</span></div>`; }
 function renderRoster(){
-  const q = normalize($("searchPlayer")?.value || "");
-  let players = [...state.roster].sort((a,b) => a.role.localeCompare(b.role) || playerValue(b) - playerValue(a));
-  if (currentRoleFilter !== "all") players = players.filter(p => p.role === currentRoleFilter);
-  if (q) players = players.filter(p => normalize(`${p.name} ${p.team} ${p.note} ${p.status}`).includes(q));
-  $("playersList").innerHTML = players.length ? players.map(playerCard).join("") : `<div class="empty">Nessun giocatore trovato.</div>`;
+  const q=normalize($("searchPlayer")?.value||"");
+  const list=state.roster.filter(p=>(currentRoleFilter==="all"||p.role===currentRoleFilter)&&(!q||normalize(`${p.name} ${p.team} ${p.note} ${p.source}`).includes(q))).sort((a,b)=>a.role.localeCompare(b.role)||a.name.localeCompare(b.name));
+  $("playersList").innerHTML = list.length?list.map(playerCard).join(""):`<div class="empty">Nessun giocatore. Aggiungi la tua rosa manualmente.</div>`;
+  document.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>editPlayer(b.dataset.edit));
+  document.querySelectorAll("[data-delete]").forEach(b=>b.onclick=()=>deletePlayer(b.dataset.delete));
+  document.querySelectorAll("[data-status]").forEach(b=>b.onchange=()=>quickStatus(b.dataset.status,b.value));
 }
-function playerCard(p){
-  return `<div class="player-card">
-    <span class="badge">${escapeHtml(p.role)}</span>
-    <div>
-      <strong>${escapeHtml(p.name)}</strong>
-      <div class="player-meta">${escapeHtml(p.team || "Senza squadra")} · costo ${fmt(p.cost)} · quot. ${fmt(p.quote)} ${p.note ? "· " + escapeHtml(p.note) : ""}</div>
-      <span class="status ${escapeHtml(p.status)}">${escapeHtml(p.status)}</span>
-    </div>
-    <div class="actions">
-      <button class="ghost" onclick="editPlayer('${p.id}')">Modifica</button>
-      <button class="danger" onclick="deletePlayer('${p.id}')">Elimina</button>
-    </div>
-  </div>`;
+function playerCard(p){ return `<div class="player-card"><span class="badge">${p.role}</span><div><strong>${escapeHtml(p.name)}</strong><div class="player-meta">${escapeHtml(p.team||"-")} · ${statusLabel(p.status)} · titolarità: ${starterLabel(p.starter)} · affidabilità ${p.reliability}/5<br>${escapeHtml(p.note||"")}${p.source?`<br>Fonte: ${escapeHtml(p.source)}`:""}</div></div><div class="actions"><select data-status="${p.id}" aria-label="Status rapido"><option value="ok" ${p.status==="ok"?"selected":""}>OK</option><option value="monitorare" ${p.status==="monitorare"?"selected":""}>Monitorare</option><option value="dubbio" ${p.status==="dubbio"?"selected":""}>Dubbio</option><option value="ballottaggio" ${p.status==="ballottaggio"?"selected":""}>Ballottaggio</option><option value="probabile" ${p.status==="probabile"?"selected":""}>Probabile</option><option value="infortunato" ${p.status==="infortunato"?"selected":""}>Infortunato</option><option value="squalificato" ${p.status==="squalificato"?"selected":""}>Squalificato</option><option value="non_convocato" ${p.status==="non_convocato"?"selected":""}>Non conv.</option><option value="evitare" ${p.status==="evitare"?"selected":""}>Evitare</option></select><button class="ghost" data-edit="${p.id}" type="button">Modifica</button><button class="danger" data-delete="${p.id}" type="button">Elimina</button></div></div>`; }
+function savePlayer(e){
+  e.preventDefault(); const id=$("playerId").value||uid();
+  const p={id,name:$("name").value.trim(),role:$("role").value,team:$("team").value.trim(),status:$("status").value,reliability:Number($("reliability").value),starter:$("starter").value,bonus:Number($("bonus").value||5),malus:Number($("malus").value||3),source:$("source").value.trim(),note:$("note").value.trim()};
+  if(!p.name) return;
+  const idx=state.roster.findIndex(x=>x.id===id); if(idx>=0) state.roster[idx]=p; else state.roster.push(p);
+  saveState(); resetPlayerForm(); renderAll(); toast("Giocatore salvato");
 }
-window.editPlayer = (id) => {
-  const p = state.roster.find(x => x.id === id);
-  if (!p) return;
-  $("playerId").value = p.id; $("name").value = p.name; $("role").value = p.role; $("team").value = p.team || "";
-  $("cost").value = p.cost || 0; $("quote").value = p.quote || 0; $("status").value = p.status || "ok"; $("note").value = p.note || "";
-  toast("Giocatore caricato nel form");
-};
-window.deletePlayer = (id) => {
-  const p = state.roster.find(x => x.id === id);
-  if (!p || !confirm(`Eliminare ${p.name}?`)) return;
-  state.roster = state.roster.filter(x => x.id !== id);
-  state.lineup.slots = state.lineup.slots.filter(x => x.playerId !== id);
-  saveState(); renderAll(); toast("Giocatore eliminato");
-};
+function resetPlayerForm(){ $("playerForm").reset(); $("playerId").value=""; $("reliability").value="3"; $("bonus").value="5"; $("malus").value="3"; }
+function editPlayer(id){ const p=state.roster.find(x=>x.id===id); if(!p)return; $("playerId").value=p.id; $("name").value=p.name; $("role").value=p.role; $("team").value=p.team||""; $("status").value=p.status||"ok"; $("reliability").value=p.reliability||3; $("starter").value=p.starter||"probabile"; $("bonus").value=p.bonus||5; $("malus").value=p.malus||3; $("source").value=p.source||""; $("note").value=p.note||""; document.querySelector('[data-view="roster"]').click(); window.scrollTo({top:0,behavior:"smooth"}); }
+function deletePlayer(id){ const p=state.roster.find(x=>x.id===id); if(p&&confirm(`Eliminare ${p.name}?`)){ state.roster=state.roster.filter(x=>x.id!==id); state.current.lineup=state.current.lineup.filter(x=>x.playerId!==id); saveState(); renderAll(); toast("Eliminato"); }}
+function quickStatus(id,status){ const p=state.roster.find(x=>x.id===id); if(!p)return; p.status=status; if(["infortunato","squalificato","non_convocato","evitare"].includes(status)) p.starter="out"; if(status==="probabile") p.starter="probabile"; saveState(); renderAll(); }
+function renderMatchday(){ $("opponent").value=state.current.opponent||""; $("deadline").value=state.current.deadline||""; $("preferredModule").value=state.current.preferredModule||"3-4-3"; $("strategy").value=state.current.strategy||"balanced"; $("matchNotes").value=state.current.notes||""; $("checklist").innerHTML=buildChecklist().map(x=>`<li>${escapeHtml(x)}</li>`).join(""); }
+function buildChecklist(){ const arr=[]; const w=state.roster.filter(p=>!isBad(p)&&isWatch(p)); const o=state.roster.filter(isBad); if(o.length) arr.push(`Sostituisci/evita: ${o.map(p=>p.name).join(", ")}.`); if(w.length) arr.push(`Controlla news e convocati per: ${w.map(p=>p.name).join(", ")}.`); arr.push("Genera formazione, poi verifica che in panchina ci siano coperture per ogni reparto."); arr.push("Incolla le ultime probabili formazioni in News Live e applica eventuali aggiornamenti."); return arr; }
+function moduleSlots(){ const [d,c,a]=(state.current.preferredModule||"3-4-3").split("-").map(Number); return ["P",...Array(d).fill("D"),...Array(c).fill("C"),...Array(a).fill("A"),"PAN","PAN","PAN","PAN","PAN","PAN","PAN"]; }
+function renderLineup(){ const slots=moduleSlots(); $("lineupSlots").innerHTML=slots.map((role,i)=>lineRow(role,i,state.current.lineup?.[i]?.playerId||"")).join(""); }
+function lineRow(role,i,selected){ const label=role==="PAN"?`P${i-10}`:role; const options=state.roster.filter(p=>role==="PAN"||p.role===role).sort((a,b)=>playerScore(b)-playerScore(a)).map(p=>`<option value="${p.id}" ${p.id===selected?"selected":""}>${escapeHtml(p.name)} · ${p.role} · ${statusLabel(p.status)}</option>`).join(""); return `<div class="line-row"><strong>${label}</strong><select data-line-slot="${i}"><option value="">-- scegli --</option>${options}</select></div>`; }
+function readLineupFromDom(){ return [...document.querySelectorAll("[data-line-slot]")].map((s,i)=>({slot:i, playerId:s.value})).filter(x=>x.playerId); }
+function autoLineup(){ const slots=moduleSlots(); const used=new Set(); const lineup=[]; slots.forEach((role,i)=>{ const candidates=state.roster.filter(p=>(role==="PAN"||p.role===role)&&!used.has(p.id)).sort((a,b)=>playerScore(b)-playerScore(a)); const pick=candidates[0]; if(pick){ used.add(pick.id); lineup[i]={slot:i,playerId:pick.id}; }}); state.current.lineup=lineup; saveState(); renderLineup(); toast("Formazione suggerita"); }
+function analyzeNews(){
+  const text=$("newsText").value; const ntext=normalize(text); if(!text.trim()){ toast("Incolla prima un testo"); return; }
+  const hits=[];
+  state.roster.forEach(p=>{ const tokens=normalize(p.name).split(/\s+/).filter(x=>x.length>2); const full=normalize(p.name); const found=ntext.includes(full)||tokens.some(t=>ntext.includes(t)); if(found){ const suggestion=suggestFromText(ntext,p); hits.push({p,suggestion}); }});
+  $("newsResults").innerHTML=hits.length?hits.map(newsHit).join(""):`<div class="empty">Nessun nome della tua rosa trovato nel testo incollato.</div>`;
+  document.querySelectorAll("[data-apply-news]").forEach(b=>b.onclick=()=>applyNews(b.dataset.applyNews,b.dataset.status,b.dataset.note));
+}
+function suggestFromText(t,p){
+  const bad=["non convocato","non sara convocato","out","salta","squalificato","lesione","infortun","operato"]; const doubt=["dubbio","lavoro a parte","a parte","affaticamento","fastidio","da valutare","personalizzato","recupero"];
+  const ballot=["ballottaggio","si gioca una maglia","insidia","contende","favorito su"]; const probable=["verso una maglia","titolare","dal 1","dal primo","recuperato","in gruppo","convocato"];
+  let status="monitorare", note="Nome trovato nella news: verificare contesto.";
+  if(bad.some(k=>t.includes(k))){ status=t.includes("squalificat")?"squalificato":(t.includes("non convoc")?"non_convocato":"infortunato"); note="News negativa: possibile out/non schierabile."; }
+  else if(doubt.some(k=>t.includes(k))){ status="dubbio"; note="News di rischio: da controllare fino alla consegna."; }
+  else if(ballot.some(k=>t.includes(k))){ status="ballottaggio"; note="News di ballottaggio/minutaggio."; }
+  else if(probable.some(k=>t.includes(k))){ status="probabile"; note="News positiva: possibile titolarità/recupero."; }
+  return {status,note};
+}
+function newsHit(h){ return `<div class="player-card"><span class="badge">${h.p.role}</span><div><strong>${escapeHtml(h.p.name)}</strong><div class="player-meta">Status attuale: ${statusLabel(h.p.status)} → suggerito: ${statusLabel(h.suggestion.status)}<br>${escapeHtml(h.suggestion.note)}</div><div class="apply-row"><button data-apply-news="${h.p.id}" data-status="${h.suggestion.status}" data-note="${escapeHtml(h.suggestion.note)}" type="button">Applica aggiornamento</button></div></div><span class="status ${h.suggestion.status}">${statusLabel(h.suggestion.status)}</span></div>`; }
+function applyNews(id,status,note){ const p=state.roster.find(x=>x.id===id); if(!p)return; p.status=status; p.note=[p.note,note].filter(Boolean).join(" · "); p.source="News incollata manualmente"; if(["infortunato","squalificato","non_convocato","evitare"].includes(status)) p.starter="out"; if(status==="probabile") p.starter="probabile"; saveState(); renderAll(); toast(`Aggiornato ${p.name}`); }
+function buildPrompt(){ const lines=[]; lines.push(`Agisci come consulente fantacalcio. Aiutami a gestire SOLO la mia rosa personale per la giornata ${state.matchday}.`); lines.push(`Squadra: ${state.settings.teamName}. Modulo preferito: ${state.current.preferredModule}. Approccio: ${state.current.strategy}.`); if(state.current.deadline) lines.push(`Scadenza formazione: ${new Date(state.current.deadline).toLocaleString("it-IT")}.`); if(state.current.notes) lines.push(`Note giornata: ${state.current.notes}`); lines.push("\nROSA:"); ["P","D","C","A"].forEach(r=>{ lines.push(`\n${roleName(r).toUpperCase()}:`); state.roster.filter(p=>p.role===r).sort((a,b)=>playerScore(b)-playerScore(a)).forEach(p=>lines.push(`- ${p.name} (${p.team||"squadra n/d"}) | status: ${statusLabel(p.status)} | titolarità: ${starterLabel(p.starter)} | affidabilità: ${p.reliability}/5 | bonus: ${p.bonus}/10 | malus: ${p.malus}/10 | note: ${p.note||"-"}`)); });
+  const lineup=readLineupFromState(); if(lineup.length){ lines.push("\nFORMAZIONE SALVATA:"); lineup.forEach(x=>lines.push(`- ${x.label}: ${x.player?.name||"-"}`)); }
+  lines.push("\nObiettivo: consigliami titolari, panchina ordinata, giocatori da evitare, dubbi da verificare e 3 priorità prima della consegna. Sii pratico e non generico."); return lines.join("\n"); }
+function readLineupFromState(){ const slots=moduleSlots(); return slots.map((role,i)=>({label:role==="PAN"?`Panchina ${i-10}`:role, player:state.roster.find(p=>p.id===state.current.lineup?.[i]?.playerId)})).filter(x=>x.player); }
+function renderPrompt(){ $("aiPrompt").value=buildPrompt(); }
+function buildBrief(){ return `Fantacalcio Rosa Live - Giornata ${state.matchday}\nScore: ${liveScore()}\nPriorità:\n${buildPriorities().map(x=>`- ${x.text}`).join("\n")}\n\n${buildPrompt()}`; }
+async function copyText(text,msg){ try{ await navigator.clipboard.writeText(text); toast(msg); }catch{ toast("Copia non riuscita: seleziona manualmente"); }}
+function archiveCurrent(){ const entry={id:uid(), date:new Date().toISOString(), matchday:state.matchday, current:clone(state.current), rosterSnapshot:clone(state.roster)}; state.archive.unshift(entry); saveState(); renderArchive(); toast("Giornata archiviata"); }
+function renderArchive(){ $("archiveList").innerHTML=state.archive.length?state.archive.map(a=>`<div class="player-card"><span class="badge">G${a.matchday}</span><div><strong>${new Date(a.date).toLocaleString("it-IT")}</strong><div class="player-meta">Modulo ${a.current.preferredModule} · ${a.rosterSnapshot.length} giocatori salvati nello snapshot</div></div><div class="actions"><button class="danger" onclick="deleteArchive('${a.id}')" type="button">Elimina</button></div></div>`).join(""):`<div class="empty">Nessuna giornata archiviata.</div>`; }
+function deleteArchive(id){ state.archive=state.archive.filter(a=>a.id!==id); saveState(); renderArchive(); }
+function renderSettings(){ $("teamName").value=state.settings.teamName||""; $("initialBudget").value=state.settings.initialBudget||0; }
+function exportJson(){ const blob=new Blob([JSON.stringify(state,null,2)],{type:"application/json"}); const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download=`fantacalcio-rosa-live-g${state.matchday}.json`; a.click(); URL.revokeObjectURL(url); }
+function importJson(e){ const file=e.target.files?.[0]; if(!file)return; const r=new FileReader(); r.onload=()=>{ try{ state=mergeState(JSON.parse(r.result)); saveState(); renderAll(); toast("Import completato"); }catch{ toast("JSON non valido"); } }; r.readAsText(file); e.target.value=""; }
 
-function bindForms(){
-  $("saveMatchdayBtn").addEventListener("click", () => { state.matchday = Number($("matchdayInput").value || 1); saveState(); renderAll(); toast("Giornata salvata"); });
-  $("playerForm").addEventListener("submit", (e) => {
-    e.preventDefault();
-    const id = $("playerId").value || uid();
-    const player = { id, name: $("name").value.trim(), role: $("role").value, team: $("team").value.trim(), cost: Number($("cost").value || 0), quote: Number($("quote").value || 0), status: $("status").value, note: $("note").value.trim() };
-    const idx = state.roster.findIndex(p => p.id === id);
-    if (idx >= 0) state.roster[idx] = player; else state.roster.push(player);
-    saveState(); clearPlayerForm(); renderAll(); toast("Giocatore salvato");
-  });
-  $("resetFormBtn").addEventListener("click", clearPlayerForm);
-  $("searchPlayer").addEventListener("input", renderRoster);
-  document.querySelectorAll(".chip").forEach(btn => btn.addEventListener("click", () => { document.querySelectorAll(".chip").forEach(b=>b.classList.remove("active")); btn.classList.add("active"); currentRoleFilter = btn.dataset.role; renderRoster(); }));
-  $("moduleSelect").addEventListener("change", () => { state.lineup.module = $("moduleSelect").value; buildEmptySlots(); saveState(); renderLineup(); });
-  $("strategySelect").addEventListener("change", () => { state.lineup.strategy = $("strategySelect").value; saveState(); });
-  $("autoLineupBtn").addEventListener("click", suggestLineup);
-  $("saveLineupBtn").addEventListener("click", saveLineupFromUI);
-  $("targetForm").addEventListener("submit", saveTarget);
-  $("resetTargetBtn").addEventListener("click", clearTargetForm);
-  $("settingsForm").addEventListener("submit", saveSettings);
-  $("copyPromptBtn").addEventListener("click", () => copyText($("aiPrompt").value));
-  $("refreshPromptBtn").addEventListener("click", renderPrompt);
-  $("copyBriefBtn").addEventListener("click", () => copyText(buildBrief()));
-  $("exportBtn").addEventListener("click", exportJson);
-  $("importFile").addEventListener("change", importJson);
-  $("resetAllBtn").addEventListener("click", resetAll);
-}
-function clearPlayerForm(){ $("playerForm").reset(); $("playerId").value = ""; $("cost").value = 0; $("quote").value = 0; }
-
-function moduleRoles(module){
-  const [d,c,a] = module.split("-").map(Number);
-  return ["P", ...Array(d).fill("D"), ...Array(c).fill("C"), ...Array(a).fill("A")];
-}
-function buildEmptySlots(){ state.lineup.slots = moduleRoles(state.lineup.module).map((role, i) => ({ slotId: `${role}-${i}`, role, playerId: "" })); }
-function renderLineup(){
-  if (!state.lineup.slots?.length || state.lineup.slots.map(s=>s.role).join("") !== moduleRoles(state.lineup.module).join("")) buildEmptySlots();
-  $("moduleSelect").value = state.lineup.module;
-  $("strategySelect").value = state.lineup.strategy || "balanced";
-  $("lineupSlots").innerHTML = state.lineup.slots.map((slot, idx) => {
-    const options = state.roster.filter(p => p.role === slot.role).sort((a,b)=>playerValue(b)-playerValue(a)).map(p => `<option value="${p.id}" ${p.id === slot.playerId ? "selected" : ""}>${escapeHtml(p.name)} · ${escapeHtml(p.status)} · ${escapeHtml(p.team || "")}</option>`).join("");
-    return `<div class="line-row"><strong>${idx+1}. ${slot.role}</strong><select data-slot="${idx}"><option value="">-- scegli --</option>${options}</select></div>`;
-  }).join("");
-}
-function saveLineupFromUI(){
-  document.querySelectorAll("#lineupSlots select").forEach(sel => { state.lineup.slots[Number(sel.dataset.slot)].playerId = sel.value; });
-  saveState(); renderAll(); toast("Formazione salvata");
-}
-function suggestLineup(){
-  const roles = moduleRoles(state.lineup.module);
-  const used = new Set();
-  state.lineup.slots = roles.map((role, idx) => {
-    const candidates = state.roster.filter(p => p.role === role && !used.has(p.id)).sort((a,b) => playerValue(b) - playerValue(a));
-    let chosen = candidates.find(p => p.status === "ok") || candidates.find(p => !["infortunato","squalificato","vendere"].includes(p.status)) || candidates[0];
-    if (chosen) used.add(chosen.id);
-    return { slotId: `${role}-${idx}`, role, playerId: chosen?.id || "" };
-  });
-  saveState(); renderLineup(); renderDashboard(); toast("Formazione suggerita");
-}
-
-function saveTarget(e){
-  e.preventDefault();
-  const id = $("targetId").value || uid();
-  const target = { id, name: $("targetName").value.trim(), role: $("targetRole").value, team: $("targetTeam").value.trim(), priority: $("targetPriority").value, bid: Number($("targetBid").value || 0), reason: $("targetReason").value.trim() };
-  const idx = state.targets.findIndex(t => t.id === id);
-  if (idx >= 0) state.targets[idx] = target; else state.targets.push(target);
-  saveState(); clearTargetForm(); renderAll(); toast("Obiettivo mercato salvato");
-}
-function renderTargets(){
-  const order = { alta: 0, media: 1, bassa: 2 };
-  const targets = [...state.targets].sort((a,b) => order[a.priority] - order[b.priority] || b.bid - a.bid);
-  $("targetsList").innerHTML = targets.length ? targets.map(t => `<div class="player-card"><span class="badge">${escapeHtml(t.role)}</span><div><strong>${escapeHtml(t.name)}</strong><div class="player-meta">${escapeHtml(t.team || "Senza squadra")} · priorità ${escapeHtml(t.priority)} · max ${fmt(t.bid)} ${t.reason ? "· " + escapeHtml(t.reason) : ""}</div></div><div class="actions"><button class="ghost" onclick="editTarget('${t.id}')">Modifica</button><button class="danger" onclick="deleteTarget('${t.id}')">Elimina</button></div></div>`).join("") : `<div class="empty">Nessun obiettivo mercato inserito.</div>`;
-}
-window.editTarget = id => { const t = state.targets.find(x=>x.id===id); if(!t)return; $("targetId").value=t.id; $("targetName").value=t.name; $("targetRole").value=t.role; $("targetTeam").value=t.team||""; $("targetPriority").value=t.priority; $("targetBid").value=t.bid||0; $("targetReason").value=t.reason||""; toast("Obiettivo caricato nel form"); };
-window.deleteTarget = id => { if(!confirm("Eliminare obiettivo mercato?"))return; state.targets = state.targets.filter(t=>t.id!==id); saveState(); renderAll(); toast("Obiettivo eliminato"); };
-function clearTargetForm(){ $("targetForm").reset(); $("targetId").value=""; $("targetBid").value=1; }
-
-function renderSettings(){
-  $("teamName").value = state.settings.teamName || "";
-  $("initialBudget").value = state.settings.initialBudget || 500;
-  $("leagueTeams").value = state.settings.leagueTeams || 10;
-  $("modifierRule").value = state.settings.modifierRule || "";
-}
-function saveSettings(e){
-  e.preventDefault();
-  state.settings = { teamName: $("teamName").value.trim() || "La mia rosa", initialBudget: Number($("initialBudget").value || 500), leagueTeams: Number($("leagueTeams").value || 10), modifierRule: $("modifierRule").value.trim() };
-  saveState(); renderAll(); toast("Impostazioni salvate");
-}
-
-function buildBrief(){
-  const analysis = healthAnalysis();
-  return `Squadra: ${state.settings.teamName}\nGiornata: ${state.matchday}\nScore rosa: ${analysis.score}/100\nGiocatori: ${state.roster.length}\nBudget residuo: ${Number(state.settings.initialBudget || 0) - spent()}\nRischi: ${riskPlayers().map(p=>`${p.name} (${p.status})`).join(", ") || "nessuno"}\nConsigli interni:\n- ${buildTips().join("\n- ")}`;
-}
-function buildAIPrompt(){
-  const byRole = ["P","D","C","A"].map(role => `\n${roleName(role)}:\n` + state.roster.filter(p=>p.role===role).map(p => `- ${p.name} (${p.team || "?"}) | stato: ${p.status} | costo: ${p.cost || 0} | quot: ${p.quote || 0} | note: ${p.note || "-"}`).join("\n")).join("\n");
-  const lineup = state.lineup.slots.map((s,i)=> { const p = state.roster.find(x=>x.id===s.playerId); return `${i+1}. ${s.role}: ${p ? p.name + " (" + p.status + ")" : "vuoto"}`; }).join("\n");
-  const targets = state.targets.map(t => `- ${t.name} (${t.role}, ${t.team || "?"}) | priorità ${t.priority} | offerta max ${t.bid} | motivo: ${t.reason || "-"}`).join("\n") || "Nessun obiettivo mercato.";
-  return `Agisci come consulente fantacalcio pragmatico per una lega a ${state.settings.leagueTeams} partecipanti.\n\nVincoli:\n- Non inventare news aggiornate su infortuni o probabili formazioni se non te le fornisco.\n- Distingui tra dati certi che ti do e ipotesi.\n- Dammi priorità operative, non spiegoni.\n\nContesto squadra:\n- Nome: ${state.settings.teamName}\n- Giornata: ${state.matchday}\n- Budget iniziale: ${state.settings.initialBudget}\n- Budget residuo stimato: ${Number(state.settings.initialBudget || 0) - spent()}\n- Regola modificatore: ${state.settings.modifierRule || "non specificata"}\n\nRosa:${byRole}\n\nFormazione attuale/suggerita modulo ${state.lineup.module}:\n${lineup || "Non impostata."}\n\nObiettivi mercato:\n${targets}\n\nDiagnosi interna app:\n${buildBrief()}\n\nRichiesta:\n1. Valuta la rosa reparto per reparto.\n2. Dimmi i 5 problemi principali in ordine di urgenza.\n3. Suggerisci formazione e panchina ragionata per la giornata ${state.matchday}.\n4. Indica tagli/scambi/acquisti prioritari.\n5. Dammi una strategia mercato concreta con budget massimo consigliato per ruolo.\n6. Chiudi con una checklist rapida prima della consegna formazione.`;
-}
-function renderPrompt(){ $("aiPrompt").value = buildAIPrompt(); }
-async function copyText(text){
-  try { await navigator.clipboard.writeText(text); toast("Copiato negli appunti"); }
-  catch { toast("Copia non riuscita: seleziona e copia manualmente"); }
-}
-
-function exportJson(){
-  const blob = new Blob([JSON.stringify(state, null, 2)], {type:"application/json"});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = `fantacalcio-manager-${new Date().toISOString().slice(0,10)}.json`; a.click();
-  URL.revokeObjectURL(url); toast("Backup esportato");
-}
-function importJson(e){
-  const file = e.target.files?.[0]; if (!file) return;
-  const reader = new FileReader();
-  reader.onload = () => {
-    try {
-      const data = JSON.parse(reader.result);
-      state = { ...structuredClone(DEFAULT_STATE), ...data };
-      saveState(); renderAll(); toast("Backup importato");
-    } catch { alert("File JSON non valido."); }
-  };
-  reader.readAsText(file);
-  e.target.value = "";
-}
-function resetAll(){
-  if (!confirm("Cancellare tutti i dati salvati in questo browser? Prima esporta un backup se ti serve.")) return;
-  state = structuredClone(DEFAULT_STATE); saveState(); renderAll(); toast("Dati cancellati");
-}
-function escapeHtml(text){
-  return String(text ?? "").replace(/[&<>"']/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m]));
-}
-
-function bindPwa(){
-  if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(()=>{});
-  window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); deferredInstallPrompt = e; $("installBtn").classList.remove("hidden"); });
-  $("installBtn").addEventListener("click", async () => { if (!deferredInstallPrompt) return; deferredInstallPrompt.prompt(); await deferredInstallPrompt.userChoice; deferredInstallPrompt = null; $("installBtn").classList.add("hidden"); });
-}
-
-bindNavigation(); bindForms(); bindPwa(); renderAll();
+bindNavigation(); bindEvents(); renderAll();

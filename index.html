@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#141827" />
-  <title>Fantacalcio Manager AI Zero</title>
+  <meta name="theme-color" content="#101827" />
+  <title>Fantacalcio Rosa Live</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -12,8 +12,8 @@
   <div class="app-shell">
     <header class="topbar">
       <div>
-        <p class="eyebrow">PWA · zero API · Android/iOS</p>
-        <h1>Fantacalcio Manager</h1>
+        <p class="eyebrow">PWA personale · zero API · Android/iOS</p>
+        <h1>Fantacalcio Rosa Live</h1>
       </div>
       <button id="installBtn" class="ghost hidden" type="button">Installa</button>
     </header>
@@ -27,176 +27,142 @@
             <button id="saveMatchdayBtn" type="button">Salva</button>
           </div>
         </div>
-        <div class="score-block">
-          <span id="healthScore" class="score">--</span>
-          <span class="muted">score rosa</span>
-        </div>
+        <div class="score-block"><span id="liveScore" class="score">--</span><span class="muted">affidabilità live</span></div>
       </section>
 
       <nav class="tabs" aria-label="Sezioni app">
-        <button class="tab active" data-view="dashboard">Dashboard</button>
+        <button class="tab active" data-view="home">Home</button>
         <button class="tab" data-view="roster">Rosa</button>
+        <button class="tab" data-view="matchday">Giornata</button>
         <button class="tab" data-view="lineup">Formazione</button>
-        <button class="tab" data-view="market">Mercato</button>
-        <button class="tab" data-view="ai">IA</button>
-        <button class="tab" data-view="settings">Dati</button>
+        <button class="tab" data-view="news">News Live</button>
+        <button class="tab" data-view="ai">Analisi IA</button>
+        <button class="tab" data-view="archive">Archivio</button>
+        <button class="tab" data-view="data">Dati</button>
       </nav>
 
-      <section id="dashboard" class="view active">
-        <div class="grid cards-3">
-          <article class="card metric"><span>Giocatori</span><strong id="totalPlayers">0</strong></article>
-          <article class="card metric"><span>Budget residuo</span><strong id="budgetLeft">0</strong></article>
-          <article class="card metric"><span>Rischi</span><strong id="riskCount">0</strong></article>
+      <section id="home" class="view active">
+        <div class="grid cards-4">
+          <article class="card metric ok"><span>Schierabili</span><strong id="okCount">0</strong></article>
+          <article class="card metric warn"><span>Da controllare</span><strong id="watchCount">0</strong></article>
+          <article class="card metric danger"><span>Da evitare</span><strong id="outCount">0</strong></article>
+          <article class="card metric"><span>Rosa</span><strong id="totalPlayers">0</strong></article>
         </div>
         <article class="card">
-          <div class="section-title"><h2>Diagnosi rosa</h2><button id="copyBriefBtn" class="ghost" type="button">Copia brief</button></div>
-          <div id="diagnosis" class="diagnosis"></div>
+          <div class="section-title"><h2>Priorità prima della consegna</h2><button id="copyBriefBtn" class="ghost" type="button">Copia brief</button></div>
+          <div id="priorities" class="diagnosis"></div>
         </article>
         <article class="card">
-          <div class="section-title"><h2>Consigli rapidi</h2></div>
-          <ul id="quickTips" class="clean-list"></ul>
+          <div class="section-title"><h2>Semaforo rosa</h2></div>
+          <div id="trafficRoster" class="compact-list"></div>
         </article>
       </section>
 
       <section id="roster" class="view">
         <article class="card">
-          <div class="section-title"><h2>Aggiungi / modifica giocatore</h2></div>
+          <div class="section-title"><h2>Giocatore rosa</h2></div>
           <form id="playerForm" class="form-grid">
             <input type="hidden" id="playerId" />
             <label>Nome<input id="name" required autocomplete="off" placeholder="es. Lautaro Martinez" /></label>
             <label>Ruolo
-              <select id="role" required>
-                <option value="P">Portiere</option>
-                <option value="D">Difensore</option>
-                <option value="C">Centrocampista</option>
-                <option value="A">Attaccante</option>
-              </select>
+              <select id="role" required><option value="P">Portiere</option><option value="D">Difensore</option><option value="C">Centrocampista</option><option value="A">Attaccante</option></select>
             </label>
             <label>Squadra<input id="team" autocomplete="off" placeholder="es. Inter" /></label>
-            <label>Costo<input id="cost" type="number" min="0" step="1" value="0" /></label>
-            <label>Quotazione<input id="quote" type="number" min="0" step="1" value="0" /></label>
-            <label>Stato
+            <label>Status live
               <select id="status">
                 <option value="ok">OK</option>
+                <option value="monitorare">Da monitorare</option>
                 <option value="dubbio">Dubbio</option>
+                <option value="ballottaggio">Ballottaggio</option>
+                <option value="probabile">Probabile titolare</option>
                 <option value="infortunato">Infortunato</option>
                 <option value="squalificato">Squalificato</option>
-                <option value="vendere">Da vendere</option>
-                <option value="monitorare">Monitorare</option>
+                <option value="non_convocato">Non convocato</option>
+                <option value="evitare">Evitare</option>
               </select>
             </label>
-            <label class="wide">Note<input id="note" autocomplete="off" placeholder="rigorista, ballottaggio, calendario, sensazioni..." /></label>
-            <div class="row form-actions wide">
-              <button type="submit">Salva giocatore</button>
-              <button id="resetFormBtn" class="ghost" type="button">Pulisci</button>
-            </div>
+            <label>Affidabilità
+              <select id="reliability"><option value="5">5 alta</option><option value="4">4 buona</option><option value="3">3 media</option><option value="2">2 bassa</option><option value="1">1 pessima</option></select>
+            </label>
+            <label>Titolarità
+              <select id="starter"><option value="sicuro">Sicuro</option><option value="probabile">Probabile</option><option value="ballottaggio">Ballottaggio</option><option value="panchina">Panchina</option><option value="out">Out</option></select>
+            </label>
+            <label>Indice bonus<input id="bonus" type="number" min="0" max="10" step="1" value="5" /></label>
+            <label>Rischio malus<input id="malus" type="number" min="0" max="10" step="1" value="3" /></label>
+            <label>Ultima fonte/link<input id="source" autocomplete="off" placeholder="link o nome fonte" /></label>
+            <label class="wide">Note<input id="note" autocomplete="off" placeholder="rigorista, piazzati, calendario, fastidio muscolare, sensazioni..." /></label>
+            <div class="row form-actions wide"><button type="submit">Salva giocatore</button><button id="resetFormBtn" class="ghost" type="button">Pulisci</button></div>
           </form>
         </article>
-
         <article class="card">
-          <div class="section-title">
-            <h2>Rosa</h2>
-            <input id="searchPlayer" class="search" placeholder="Cerca nome, squadra, note..." />
-          </div>
-          <div class="role-filters">
-            <button class="chip active" data-role="all" type="button">Tutti</button>
-            <button class="chip" data-role="P" type="button">P</button>
-            <button class="chip" data-role="D" type="button">D</button>
-            <button class="chip" data-role="C" type="button">C</button>
-            <button class="chip" data-role="A" type="button">A</button>
-          </div>
+          <div class="section-title"><h2>La mia rosa</h2><input id="searchPlayer" class="search" placeholder="Cerca nome, squadra, note..." /></div>
+          <div class="role-filters"><button class="chip active" data-role="all" type="button">Tutti</button><button class="chip" data-role="P" type="button">P</button><button class="chip" data-role="D" type="button">D</button><button class="chip" data-role="C" type="button">C</button><button class="chip" data-role="A" type="button">A</button></div>
           <div id="playersList" class="players-list"></div>
         </article>
       </section>
 
+      <section id="matchday" class="view">
+        <article class="card">
+          <div class="section-title"><h2>Giornata corrente</h2></div>
+          <form id="matchdayForm" class="form-grid slim">
+            <label>Avversario fantacalcio<input id="opponent" autocomplete="off" placeholder="opzionale" /></label>
+            <label>Scadenza formazione<input id="deadline" type="datetime-local" /></label>
+            <label>Modulo preferito<select id="preferredModule"><option>3-4-3</option><option>3-5-2</option><option>4-3-3</option><option>4-4-2</option><option>4-5-1</option><option>5-3-2</option><option>5-4-1</option></select></label>
+            <label>Approccio<select id="strategy"><option value="balanced">Equilibrato</option><option value="safe">Prudente</option><option value="upside">Bonus/rischio</option></select></label>
+            <label class="wide">Note giornata<textarea id="matchNotes" placeholder="Appunti: partite difficili, dubbi, sensazioni, priorità..." ></textarea></label>
+            <button class="wide" type="submit">Salva giornata</button>
+          </form>
+        </article>
+        <article class="card"><div class="section-title"><h2>Checklist live</h2></div><ul id="checklist" class="clean-list"></ul></article>
+      </section>
+
       <section id="lineup" class="view">
         <article class="card">
-          <div class="section-title"><h2>Formazione giornata</h2></div>
-          <div class="form-grid slim">
-            <label>Modulo
-              <select id="moduleSelect">
-                <option value="3-4-3">3-4-3</option>
-                <option value="3-5-2">3-5-2</option>
-                <option value="4-3-3">4-3-3</option>
-                <option value="4-4-2">4-4-2</option>
-                <option value="4-5-1">4-5-1</option>
-                <option value="5-3-2">5-3-2</option>
-                <option value="5-4-1">5-4-1</option>
-              </select>
-            </label>
-            <label>Approccio
-              <select id="strategySelect">
-                <option value="balanced">Equilibrato</option>
-                <option value="safe">Prudente</option>
-                <option value="upside">Rischio/bonus</option>
-              </select>
-            </label>
-          </div>
+          <div class="section-title"><h2>Formazione consigliata</h2></div>
           <div id="lineupSlots" class="lineup-slots"></div>
-          <div class="row form-actions">
-            <button id="autoLineupBtn" type="button">Suggerisci formazione</button>
-            <button id="saveLineupBtn" class="ghost" type="button">Salva formazione</button>
-          </div>
+          <div class="row form-actions wrap"><button id="autoLineupBtn" type="button">Suggerisci dai dati live</button><button id="saveLineupBtn" class="ghost" type="button">Salva formazione</button><button id="clearLineupBtn" class="ghost" type="button">Svuota</button></div>
         </article>
       </section>
 
-      <section id="market" class="view">
+      <section id="news" class="view">
         <article class="card">
-          <div class="section-title"><h2>Mercato e svincolati</h2></div>
-          <form id="targetForm" class="form-grid">
-            <input type="hidden" id="targetId" />
-            <label>Nome<input id="targetName" required autocomplete="off" placeholder="Giocatore da seguire" /></label>
-            <label>Ruolo
-              <select id="targetRole"><option>P</option><option>D</option><option>C</option><option>A</option></select>
-            </label>
-            <label>Squadra<input id="targetTeam" autocomplete="off" /></label>
-            <label>Priorità
-              <select id="targetPriority"><option value="alta">Alta</option><option value="media">Media</option><option value="bassa">Bassa</option></select>
-            </label>
-            <label>Offerta max<input id="targetBid" type="number" min="0" step="1" value="1" /></label>
-            <label class="wide">Motivo<input id="targetReason" autocomplete="off" placeholder="titolare, calendario, sostituisce un tuo giocatore..." /></label>
-            <div class="row form-actions wide"><button type="submit">Salva obiettivo</button><button id="resetTargetBtn" class="ghost" type="button">Pulisci</button></div>
-          </form>
-          <div id="targetsList" class="players-list"></div>
+          <div class="section-title"><h2>Incolla news / probabili formazioni</h2></div>
+          <p class="muted">Incolla testo da articoli, probabili formazioni o appunti. L'app cerca i nomi della tua rosa e propone aggiornamenti status senza usare API.</p>
+          <textarea id="newsText" placeholder="Esempio: Lautaro ha lavorato a parte, Orsolini verso una maglia da titolare, Dimarco resta in dubbio..."></textarea>
+          <div class="row form-actions wrap"><button id="analyzeNewsBtn" type="button">Analizza testo</button><button id="clearNewsBtn" class="ghost" type="button">Pulisci testo</button></div>
         </article>
+        <article class="card"><div class="section-title"><h2>Risultati analisi</h2></div><div id="newsResults" class="players-list"></div></article>
       </section>
 
       <section id="ai" class="view">
         <article class="card">
-          <div class="section-title"><h2>IA a costo zero</h2></div>
-          <p class="muted">L'app genera un prompt completo da incollare in ChatGPT. Nessuna API, nessun costo, nessuna chiave.</p>
+          <div class="section-title"><h2>Prompt ChatGPT</h2></div>
+          <p class="muted">Questo è il ponte IA gratis: copi il prompt e lo incolli in ChatGPT quando vuoi un parere più ragionato.</p>
           <textarea id="aiPrompt" readonly></textarea>
-          <div class="row form-actions">
-            <button id="copyPromptBtn" type="button">Copia prompt IA</button>
-            <button id="refreshPromptBtn" class="ghost" type="button">Rigenera</button>
-          </div>
+          <div class="row form-actions wrap"><button id="copyPromptBtn" type="button">Copia prompt IA</button><button id="refreshPromptBtn" class="ghost" type="button">Rigenera</button></div>
         </article>
       </section>
 
-      <section id="settings" class="view">
+      <section id="archive" class="view">
         <article class="card">
-          <div class="section-title"><h2>Impostazioni lega</h2></div>
-          <form id="settingsForm" class="form-grid slim">
-            <label>Nome squadra<input id="teamName" autocomplete="off" /></label>
-            <label>Crediti iniziali<input id="initialBudget" type="number" min="0" step="1" /></label>
-            <label>Partecipanti lega<input id="leagueTeams" type="number" min="2" step="1" /></label>
-            <label>Regola modificatore<input id="modifierRule" autocomplete="off" placeholder="es. difesa classica / no" /></label>
-            <button class="wide" type="submit">Salva impostazioni</button>
-          </form>
+          <div class="section-title"><h2>Archivio giornate</h2><button id="archiveCurrentBtn" type="button">Archivia giornata</button></div>
+          <div id="archiveList" class="players-list"></div>
+        </article>
+      </section>
+
+      <section id="data" class="view">
+        <article class="card">
+          <div class="section-title"><h2>Impostazioni</h2></div>
+          <form id="settingsForm" class="form-grid slim"><label>Nome squadra<input id="teamName" autocomplete="off" /></label><label>Crediti iniziali<input id="initialBudget" type="number" min="0" step="1" /></label><button class="wide" type="submit">Salva impostazioni</button></form>
         </article>
         <article class="card">
           <div class="section-title"><h2>Backup</h2></div>
-          <div class="row form-actions wrap">
-            <button id="exportBtn" type="button">Esporta JSON</button>
-            <label class="file-btn">Importa JSON<input id="importFile" type="file" accept="application/json" /></label>
-            <button id="resetAllBtn" class="danger" type="button">Reset totale</button>
-          </div>
-          <p class="muted">Consiglio: esporta spesso il JSON e tienilo su Google Drive/WhatsApp/Telegram per passarlo anche al tuo amico.</p>
+          <div class="row form-actions wrap"><button id="exportBtn" type="button">Esporta JSON</button><label class="file-btn">Importa JSON<input id="importFile" type="file" accept="application/json" /></label><button id="resetAllBtn" class="danger" type="button">Reset totale</button></div>
+          <p class="muted">I dati restano sul dispositivo. Per passare la rosa a un altro telefono usa esporta/importa JSON.</p>
         </article>
       </section>
     </main>
   </div>
-
   <div id="toast" class="toast hidden" role="status"></div>
   <script src="app.js"></script>
 </body>
