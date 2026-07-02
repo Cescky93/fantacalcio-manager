@@ -1,6 +1,16 @@
-# Fantacalcio Rosa Live V3
+# Fantacalcio Rosa Live V4
 
 PWA personale per gestire solo la propria rosa fantacalcio durante la stagione.
+
+## Novità V4
+
+- Richiesta IA blindata per la prossima giornata utile di Serie A.
+- Campi dedicati a stagione, giornata Serie A reale, calendario partite e deadline formazione.
+- Modalità prompt: Fast, Standard, Deep.
+- Modalità IA: con web oppure senza web.
+- Pacchetto dati JSON integrato nel prompt, leggibile da ChatGPT, Gemini o Claude.
+- Regole anti-confusione temporale: la IA deve analizzare solo la giornata indicata e non mischiare eventi passati.
+- Salvataggio della risposta IA dentro la giornata corrente.
 
 ## Obiettivo
 
@@ -12,7 +22,7 @@ Non è un gestionale lega e non è un tool asta. Serve per:
 - marcare status live: OK, dubbio, ballottaggio, infortunato, squalificato, non convocato;
 - incollare news/probabili formazioni e applicare aggiornamenti ai giocatori trovati;
 - generare una formazione suggerita con regole locali;
-- copiare un prompt già strutturato per ChatGPT;
+- copiare una richiesta IA precisa e datata;
 - salvare backup JSON.
 
 ## Costi

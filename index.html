@@ -106,10 +106,16 @@
         <article class="card">
           <div class="section-title"><h2>Giornata corrente</h2></div>
           <form id="matchdayForm" class="form-grid slim">
+            <label>Stagione Serie A<input id="season" autocomplete="off" placeholder="es. 2026/27" /></label>
+            <label>Giornata Serie A da analizzare<input id="serieARound" type="number" min="1" max="38" /></label>
             <label>Avversario fantacalcio<input id="opponent" autocomplete="off" placeholder="opzionale" /></label>
             <label>Scadenza formazione<input id="deadline" type="datetime-local" /></label>
             <label>Modulo preferito<select id="preferredModule"><option>3-4-3</option><option>3-5-2</option><option>4-3-3</option><option>4-4-2</option><option>4-5-1</option><option>5-3-2</option><option>5-4-1</option></select></label>
             <label>Approccio<select id="strategy"><option value="balanced">Equilibrato</option><option value="safe">Prudente</option><option value="upside">Bonus/rischio</option></select></label>
+            <label class="inline-check wide"><input id="isNextRound" type="checkbox" /> Questa è la prossima giornata utile da giocare</label>
+            <label class="wide">Calendario giornata reale<textarea id="roundCalendar" placeholder="Una partita per riga, es. Inter vs Torino
+Juventus vs Bologna
+Napoli vs Roma"></textarea></label>
             <label class="wide">Note giornata<textarea id="matchNotes" placeholder="Appunti: partite difficili, dubbi, sensazioni, priorità..." ></textarea></label>
             <button class="wide" type="submit">Salva giornata</button>
           </form>
@@ -137,10 +143,31 @@
 
       <section id="ai" class="view">
         <article class="card">
-          <div class="section-title"><h2>Prompt ChatGPT</h2></div>
-          <p class="muted">Questo è il ponte IA gratis: copi il prompt e lo incolli in ChatGPT quando vuoi un parere più ragionato.</p>
+          <div class="section-title"><h2>Richiesta IA blindata</h2></div>
+          <p class="muted">Questo è il ponte IA gratis: l'app prepara un pacchetto dati preciso sulla prossima giornata utile. Copialo in ChatGPT, Gemini o Claude. Nessuna API, nessun costo.</p>
+          <div class="form-grid slim">
+            <label>Profondità richiesta
+              <select id="aiMode">
+                <option value="fast">Fast · pochi token</option>
+                <option value="standard" selected>Standard · consigliata</option>
+                <option value="deep">Deep · analisi completa</option>
+              </select>
+            </label>
+            <label>Tipo di IA usata
+              <select id="aiKnowledgeMode">
+                <option value="web">IA con ricerca web / notizie aggiornate</option>
+                <option value="no_web">IA senza web · usa solo dati forniti</option>
+              </select>
+            </label>
+          </div>
           <textarea id="aiPrompt" readonly></textarea>
-          <div class="row form-actions wrap"><button id="copyPromptBtn" type="button">Copia prompt IA</button><button id="refreshPromptBtn" class="ghost" type="button">Rigenera</button></div>
+          <div class="row form-actions wrap"><button id="copyPromptBtn" type="button">Copia richiesta IA</button><button id="refreshPromptBtn" class="ghost" type="button">Rigenera</button></div>
+        </article>
+        <article class="card">
+          <div class="section-title"><h2>Salva risposta IA</h2></div>
+          <p class="muted">Dopo aver ricevuto l'analisi dalla IA, incollala qui per tenerla nello storico della giornata. Se la risposta contiene un JSON, verrà conservato come testo insieme al parere.</p>
+          <textarea id="aiResponse" placeholder="Incolla qui la risposta di ChatGPT/Gemini/Claude..."></textarea>
+          <div class="row form-actions wrap"><button id="saveAiResponseBtn" type="button">Salva risposta nella giornata</button><button id="clearAiResponseBtn" class="ghost" type="button">Pulisci</button></div>
         </article>
       </section>
 
@@ -160,7 +187,7 @@
             <div class="instruction-box"><strong>2. Aggiorna la giornata</strong><p>In <b>Giornata</b> imposta numero giornata, modulo preferito, scadenza formazione e note personali.</p></div>
             <div class="instruction-box"><strong>3. Controlla le news</strong><p>In <b>News Live</b> incolla probabili formazioni, indisponibili o appunti presi da fonti esterne. L'app cerca i tuoi giocatori e propone status aggiornati.</p></div>
             <div class="instruction-box"><strong>4. Genera la formazione</strong><p>In <b>Formazione</b> premi “Suggerisci dai dati live”. Poi correggi manualmente se hai sensazioni diverse.</p></div>
-            <div class="instruction-box"><strong>5. Usa ChatGPT gratis</strong><p>In <b>Analisi IA</b> copia il prompt e incollalo in ChatGPT per avere un parere più ragionato. L'app non usa API e non costa nulla.</p></div>
+            <div class="instruction-box"><strong>5. Usa IA gratis</strong><p>In <b>Analisi IA</b> scegli Fast/Standard/Deep, copia la richiesta blindata e incollala in ChatGPT, Gemini o Claude. La richiesta è ancorata alla giornata Serie A indicata.</p></div>
             <div class="instruction-box"><strong>6. Backup</strong><p>In <b>Dati</b> esporta JSON per salvare la rosa o passarla a un altro dispositivo. Ogni telefono mantiene i propri dati separati.</p></div>
           </div>
         </article>
